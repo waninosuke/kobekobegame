@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>KOBE Collection Game</title>
+    <style>
+        body { margin: 0; padding: 0; text-align: center; background-color: #e0f7fa; font-family: 'Arial', sans-serif; overflow: hidden; touch-action: none; }
+        canvas { background-color: #fff; border-bottom: 4px solid #004d40; display: block; }
+        h1 { color: #004d40; font-size: 1.5em; margin: 10px 0; }
+        .info { font-size: 0.9em; margin-bottom: 5px; }
+    </style>
+</head>
+<body>
+    <h1>⚓ 神戸名産キャッチ 🍰</h1>
+    <p class="info">画面を左右にスライドして、神戸の美味しいものを集めよう！</p>
+    <canvas id="gameCanvas"></canvas>
+
+    <script>
+        const canvas = document.getElementById("gameCanvas");
+        const ctx = canvas.getContext("2d");
+
+        // 画面サイズに合わせる
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight * 0.7; // 画面の7割をゲーム画面に
+
+        let score = 0;
+        let gameOver = false;
+
+        // プレイヤー（カゴ）の設定
+        const basket = { x: canvas.width / 2 - 40, y: canvas.height - 40, width: 80, height: 20, color: "#8d6e63" };
+
+        // 降ってくるアイテム（神戸ネタ）
+        const items = [];
+        const kobeItems = [
+            { char: "🥩", name: "神戸牛", points: 10 },
+            { char: "🍰", name: "スイーツ", points: 5 },
+            { char: "🥟", name: "豚まん", points: 5 },
+            { char: "⚓", name: "イカリ", points: 2 }
+        ];
+
+        function createItem() {
+            const type = kobeItems[Math.floor(Math.random() * kobeItems.length)];
+            items.push({
+                x: Math.random() * (canvas.width - 30),
+                y: -30, // 画面外上部からスタート
+                speed: 3 + Math.random() * 4, // スマホ用に少し速く
+                ...type
+            });
+        }
+
+        // タッチ移動イベント（スマホ用）
+        canvas.addEventListener("touchmove", (e) => {
+            e.preventDefault(); // スクロール防止
+            const touch = e.touches[0];
+            const rect = canvas.getBoundingClientRect();
+            basket.x = touch.clientX - rect.left - basket.width / 2;
+
+            // 画面外にはみ出さないように制限
+            if (basket.x < 0) basket.x = 0;
+            if (basket.x > canvas.width - basket.width) basket.x = canvas.width - basket.width;
+        }, { passive: false });
+
+        // マウス移動イベント（PC用）
+        canvas.addEventListener("mousemove", (e) => {
+            const rect = canvas.getBoundingClientRect();
+            basket.x = e.clientX - rect.left - basket.width / 2;
+            if (basket.x < 0) basket.x = 0;
+            if (basket.x > canvas.width - basket.width) basket.x = canvas.width - basket.width;
+        });
+
+        function update() {
+            if (gameOver) return;
+
+            if (Math.random() < 0.03) createItem(); // 出現率を少しアップ
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                items[i].y += items[i].speed;
+
+                if (items[i].y + 20 > basket.y && 
+                    items[i].x > basket.x - 20 && // 当たり判定を少し広く
+                    items[i].x < basket.x + basket.width) {
+                    score += items[i].points;
+                    items.splice(i, 1);
+                    continue;
+                }
+
+                if (items[i].y > canvas.height) {
+                    items.splice(i, 1);
+                }
+            }
+        }
+
+        function draw() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            ctx.fillStyle = basket.color;
+            ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+
+            ctx.font = "35px Arial";
+            items.forEach(item => {
+                ctx.fillText(item.char, item.x, item.y);
+            });
+
+            ctx.fillStyle = "#000";
+            ctx.font = "bold 20px Arial";
+            ctx.fillText("スコア: " + score, 20, 30);
+        }
+
+        function gameLoop() {
+            update();
+            draw();
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
