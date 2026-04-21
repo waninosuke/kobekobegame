@@ -119,7 +119,7 @@
 
         function update() {
             if (gameState !== "playing") return;
-            if (Math.random() < 0.01 + (score / 5000)) createItem();
+            if (Math.random() < 0.01 + (score / 1000)) createItem();
 
             for (let i = items.length - 1; i >= 0; i--) {
                 items[i].y += items[i].speed;
