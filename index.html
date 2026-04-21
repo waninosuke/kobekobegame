@@ -3,35 +3,48 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-    <title>KOBE Collection Game</title>
+    <title>KOBE Memory Catcher</title>
     <style>
-        body { margin: 0; padding: 0; text-align: center; background-color: #e0f7fa; font-family: 'Arial', sans-serif; overflow: hidden; touch-action: none; }
-        canvas { background-color: #fff; border-bottom: 4px solid #004d40; display: block; }
-        
-        /* スタート・リトライ画面のオーバーレイ */
+        body { margin: 0; padding: 0; text-align: center; background-color: #003366; font-family: 'Helvetica Neue', Arial, sans-serif; overflow: hidden; touch-action: none; }
+        /* 背景画像をここに設定（後で自分の写真に変えられます） */
+        canvas { 
+            background: url('kobephoto.jpg') no-repeat center center;
+            background-size: cover;
+            display: block; margin: 0 auto;
+        }
         #overlay {
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(0, 0, 0, 0.7);
+            background: rgba(0, 20, 40, 0.85);
             display: flex; flex-direction: column; justify-content: center; align-items: center;
-            color: white; z-index: 10;
+            color: white; z-index: 10; padding: 20px; box-sizing: border-box;
         }
         button {
-            padding: 15px 30px; font-size: 1.2em; font-weight: bold;
-            background-color: #ff9800; color: white; border: none; border-radius: 50px;
-            cursor: pointer; box-shadow: 0 4px #e65100;
+            padding: 18px 40px; font-size: 1.4em; font-weight: bold;
+            background: linear-gradient(to bottom, #ffca28, #ff8f00);
+            color: #4e342e; border: none; border-radius: 50px;
+            cursor: pointer; box-shadow: 0 6px #bf360c; transition: 0.2s;
         }
-        button:active { transform: translateY(2px); box-shadow: 0 2px #e65100; }
-        h1 { margin-bottom: 10px; }
-        .score-display { font-size: 2em; color: #ffeb3b; margin-bottom: 20px; }
+        button:active { transform: translateY(3px); box-shadow: 0 2px #bf360c; }
+        .score-display { font-size: 2.5em; color: #fff176; margin: 10px 0; text-shadow: 2px 2px 4px #000; }
+        .trivia-box { 
+            background: rgba(255, 255, 255, 0.2); border-radius: 15px; 
+            padding: 15px; margin: 20px 0; font-size: 0.9em; line-height: 1.6; max-width: 80%;
+        }
     </style>
 </head>
 <body>
 
     <div id="overlay">
-        <h1 id="title">⚓ 神戸名産キャッチ 🍰</h1>
-        <p id="message" style="margin-bottom: 20px;">アイテムを逃さず集めよう！</p>
+        <h1 id="title">⚓ KOBE Memory Catcher</h1>
+        <p id="message">神戸の思い出をキャッチせよ！<br>1つでも落としたらゲームオーバー...</p>
+        
+        <div id="triviaArea" class="trivia-box" style="display:none;">
+            <strong>💡 神戸豆知識 💡</strong><br>
+            <span id="triviaText"></span>
+        </div>
+
         <div id="finalScore" class="score-display" style="display:none;"></div>
-        <button id="startBtn">ゲーム開始！</button>
+        <button id="startBtn">冒険を始める</button>
     </div>
 
     <canvas id="gameCanvas"></canvas>
@@ -41,29 +54,43 @@
         const ctx = canvas.getContext("2d");
         const overlay = document.getElementById("overlay");
         const startBtn = document.getElementById("startBtn");
-        const message = document.getElementById("message");
+        const triviaArea = document.getElementById("triviaArea");
+        const triviaText = document.getElementById("triviaText");
         const finalScore = document.getElementById("finalScore");
-        const title = document.getElementById("title");
 
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
 
         let score = 0;
-        let gameState = "start"; // "start", "playing", "gameOver"
+        let gameState = "start";
         let items = [];
-        const basket = { x: canvas.width / 2 - 40, y: canvas.height - 80, width: 80, height: 20, color: "#8d6e63" };
+        let particles = [];
+        const basket = { x: canvas.width / 2 - 50, y: canvas.height - 100, width: 100, height: 25, color: "#ffffff" };
 
         const kobeItems = [
-            { char: "🥩", points: 10 },
-            { char: "🍰", points: 5 },
-            { char: "🥟", points: 5 },
-            { char: "⚓", points: 2 }
+            { char: "🥩", points: 15, info: "神戸牛：世界で最も高価な牛肉の一つとして有名だよ！" },
+            { char: "🍰", points: 10, info: "神戸スイーツ：神戸は日本での洋菓子発祥の地と言われているんだ。" },
+            { char: "🥟", points: 10, info: "南京町：横浜・長崎と並ぶ日本三大中華街の一つだよ。" },
+            { char: "⚓", points: 5,  info: "神戸港：1868年の開港以来、日本の玄関口として栄えてきたよ。" },
+            { char: "🗼", points: 20, info: "ポートタワー：世界初のパイプ構造の建造物。形が和楽器の鼓に似ているんだ。" }
         ];
 
-        // ゲーム開始・リセット処理
+        // 効果音（Web Audio APIで生成）
+        function playSound(freq) {
+            const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain);
+            gain.connect(audioCtx.destination);
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.0001, audioCtx.currentTime + 0.1);
+            osc.start();
+            osc.stop(audioCtx.currentTime + 0.1);
+        }
+
         function startGame() {
-            score = 0;
-            items = [];
+            score = 0; items = []; particles = [];
             gameState = "playing";
             overlay.style.display = "none";
             gameLoop();
@@ -71,51 +98,44 @@
 
         startBtn.addEventListener("click", startGame);
 
-        // タッチ/マウス操作
-        const moveBasket = (clientX) => {
-            if (gameState !== "playing") return;
-            const rect = canvas.getBoundingClientRect();
-            basket.x = clientX - rect.left - basket.width / 2;
-            if (basket.x < 0) basket.x = 0;
-            if (basket.x > canvas.width - basket.width) basket.x = canvas.width - basket.width;
-        };
-
         canvas.addEventListener("touchmove", (e) => {
             e.preventDefault();
-            moveBasket(e.touches[0].clientX);
+            basket.x = e.touches[0].clientX - basket.width / 2;
         }, { passive: false });
 
-        canvas.addEventListener("mousemove", (e) => moveBasket(e.clientX));
+        canvas.addEventListener("mousemove", (e) => {
+            basket.x = e.clientX - basket.width / 2;
+        });
 
         function createItem() {
             const type = kobeItems[Math.floor(Math.random() * kobeItems.length)];
             items.push({
-                x: Math.random() * (canvas.width - 30),
-                y: -30,
-                speed: 4 + Math.random() * 3,
+                x: Math.random() * (canvas.width - 40) + 20,
+                y: -50,
+                speed: 4 + (score / 100), // スコアが上がると速くなる
                 ...type
             });
         }
 
         function update() {
             if (gameState !== "playing") return;
-
-            if (Math.random() < 0.03) createItem();
+            if (Math.random() < 0.03 + (score / 5000)) createItem();
 
             for (let i = items.length - 1; i >= 0; i--) {
                 items[i].y += items[i].speed;
 
-                // キャッチ判定
-                if (items[i].y + 20 > basket.y && 
+                if (items[i].y + 30 > basket.y && 
                     items[i].x > basket.x - 20 && 
-                    items[i].x < basket.x + basket.width) {
+                    items[i].x < basket.x + basket.width + 20) {
+                    
                     score += items[i].points;
+                    playSound(600 + score); // キャッチ音
                     items.splice(i, 1);
                     continue;
                 }
 
-                // 「ミスったら死ぬ」判定（画面の下に落ちたら終了）
                 if (items[i].y > canvas.height) {
+                    playSound(150); // 失敗音
                     endGame();
                 }
             }
@@ -124,30 +144,57 @@
         function endGame() {
             gameState = "gameOver";
             overlay.style.display = "flex";
-            title.innerText = "GAME OVER";
-            message.innerText = "アイテムを落としてしまった！";
+            document.getElementById("title").innerText = "GAME OVER";
+            document.getElementById("message").innerHTML = "神戸の思い出を落としてしまった！";
+            
+            // 豆知識をランダム表示
+            const randomTrivia = kobeItems[Math.floor(Math.random() * kobeItems.length)];
+            triviaText.innerText = randomTrivia.info;
+            triviaArea.style.display = "block";
+            
             finalScore.innerText = "SCORE: " + score;
             finalScore.style.display = "block";
-            startBtn.innerText = "もう一度挑戦！";
+            startBtn.innerText = "リトライ";
         }
 
         function draw() {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-            // カゴ
-            ctx.fillStyle = basket.color;
-            ctx.fillRect(basket.x, basket.y, basket.width, basket.height);
+            // プレイヤー（お洒落な枠線付き）
+            ctx.fillStyle = "rgba(255,255,255,0.8)";
+            ctx.strokeStyle = "#00bcd4";
+            ctx.lineWidth = 3;
+            ctx.roundRect(basket.x, basket.y, basket.width, basket.height, 10);
+            ctx.fill();
+            ctx.stroke();
 
             // アイテム
-            ctx.font = "35px Arial";
+            ctx.font = "40px serif";
             items.forEach(item => {
                 ctx.fillText(item.char, item.x, item.y);
             });
 
-            // プレイ中のスコア表示
-            ctx.fillStyle = "#004d40";
-            ctx.font = "bold 20px Arial";
-            ctx.fillText("スコア: " + score, 20, 40);
+            // スコアUI
+            ctx.fillStyle = "white";
+            ctx.font = "bold 24px Arial";
+            ctx.shadowBlur = 4;
+            ctx.shadowColor = "black";
+            ctx.fillText("SCORE: " + score, 20, 50);
+            ctx.shadowBlur = 0;
+        }
+
+        // 角丸四角形を描くための関数
+        CanvasRenderingContext2D.prototype.roundRect = function (x, y, w, h, r) {
+            if (w < 2 * r) r = w / 2;
+            if (h < 2 * r) r = h / 2;
+            this.beginPath();
+            this.moveTo(x + r, y);
+            this.arcTo(x + w, y, x + w, y + h, r);
+            this.arcTo(x + w, y + h, x, y + h, r);
+            this.arcTo(x, y + h, x, y, r);
+            this.arcTo(x, y, x + w, y, r);
+            this.closePath();
+            return this;
         }
 
         function gameLoop() {
